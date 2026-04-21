@@ -61,6 +61,7 @@ QUESTION_TEMPLATES = [
 
 def build_cases() -> List[Dict]:
     cases = []
+    case_id = 0
 
     mapping = {
         "doc_ai_eval_intro": [
@@ -74,15 +75,15 @@ def build_cases() -> List[Dict]:
             ("Hit Rate là gì?", "Hit Rate đo xem tài liệu đúng có xuất hiện trong top-k kết quả retrieval hay không."),
             ("Hit Rate dùng để đo điều gì?", "Hit Rate đo khả năng retriever lấy được tài liệu đúng trong top-k."),
             ("Khi nào Hit Rate bằng 1?", "Hit Rate bằng 1 khi ít nhất một tài liệu đúng xuất hiện trong top-k."),
-            ("Hit Rate liên quan gì đến retrieval?", "Hit Rate là chỉ số đánh giá chất lượng retrieval."),
-            ("Top-k và Hit Rate liên hệ thế nào?", "Hit Rate kiểm tra xem tài liệu đúng có nằm trong top-k hay không.")
+            ("Hit Rate có hạn chế gì so với MRR?", "Hit Rate không phản ánh vị trí của tài liệu đúng, trong khi MRR có."),
+            ("Nếu Hit Rate cao nhưng user vẫn không hài lòng, vấn đề có thể là gì?", "Có thể tài liệu đúng không nằm ở vị trí cao hoặc câu trả lời chưa tốt.")
         ],
         "doc_mrr": [
-            ("MRR là gì?", "MRR là Mean Reciprocal Rank, dùng để đo thứ hạng của tài liệu đúng trong danh sách retrieved."),
-            ("Nếu tài liệu đúng đứng thứ 1 thì MRR bằng bao nhiêu?", "Nếu tài liệu đúng ở vị trí 1 thì MRR bằng 1.0."),
-            ("Nếu tài liệu đúng đứng thứ 2 thì MRR bằng bao nhiêu?", "Nếu tài liệu đúng ở vị trí 2 thì MRR bằng 0.5."),
-            ("Nếu tài liệu đúng đứng thứ 3 thì MRR bằng bao nhiêu?", "Nếu tài liệu đúng ở vị trí 3 thì MRR xấp xỉ 0.333."),
-            ("MRR dùng để làm gì?", "MRR dùng để đánh giá vị trí xuất hiện của tài liệu đúng trong retrieval.")
+            ("MRR là gì?", "MRR là Mean Reciprocal Rank, dùng để đo thứ hạng của tài liệu đúng."),
+            ("Nếu tài liệu đúng đứng thứ 1 thì MRR bằng bao nhiêu?", "MRR bằng 1.0."),
+            ("Nếu tài liệu đúng đứng thứ 2 thì MRR bằng bao nhiêu?", "MRR bằng 0.5."),
+            ("MRR khác gì Hit Rate?", "MRR xét vị trí tài liệu đúng còn Hit Rate chỉ xét có hay không."),
+            ("Vì sao MRR quan trọng hơn Hit Rate trong một số hệ thống?", "Vì nó phản ánh chất lượng ranking chứ không chỉ sự xuất hiện.")
         ],
         "doc_multi_judge": [
             ("Multi-judge consensus là gì?", "Multi-judge consensus là phương pháp dùng nhiều model judge để chấm cùng một câu trả lời."),
@@ -99,11 +100,11 @@ def build_cases() -> List[Dict]:
             ("Agreement Rate liên quan gì đến multi-judge?", "Agreement Rate là chỉ số quan trọng trong multi-judge consensus.")
         ],
         "doc_failure_analysis": [
-            ("Failure Analysis là gì?", "Failure Analysis là quá trình phân tích các lỗi của hệ thống AI để tìm nguyên nhân."),
-            ("Failure clustering dùng để làm gì?", "Failure clustering dùng để nhóm các lỗi giống nhau như hallucination hay incomplete."),
-            ("Vì sao cần phân tích lỗi?", "Cần phân tích lỗi để biết hệ thống yếu ở đâu và cải thiện đúng chỗ."),
-            ("Failure Analysis có giúp tối ưu agent không?", "Có, vì nó giúp xác định nguyên nhân và hướng cải tiến."),
-            ("Các nhóm lỗi thường gặp là gì?", "Một số nhóm lỗi thường gặp là hallucination, incomplete answer và tone mismatch.")
+            ("Failure Analysis là gì?", "Failure Analysis là quá trình phân tích lỗi của hệ thống AI."),
+            ("Failure clustering dùng để làm gì?", "Dùng để nhóm các lỗi giống nhau."),
+            ("Vì sao cần phân tích lỗi?", "Để biết hệ thống yếu ở đâu."),
+            ("Failure Analysis giúp cải thiện agent như thế nào?", "Bằng cách xác định root cause và hướng tối ưu."),
+            ("Nếu retrieval đúng nhưng answer sai, lỗi nằm ở đâu?", "Lỗi nằm ở generation hoặc prompt, không phải retrieval.")
         ],
         "doc_five_whys": [
             ("5 Whys là gì?", "5 Whys là phương pháp hỏi tại sao nhiều lần để tìm nguyên nhân gốc rễ."),
@@ -135,19 +136,23 @@ def build_cases() -> List[Dict]:
         ],
     }
 
+    # return cases
     for doc_id, qa_list in mapping.items():
         for idx, (question, expected_answer) in enumerate(qa_list):
             difficulty = "hard" if idx == 4 else ("medium" if idx in [2, 3] else "easy")
             case_type = "adversarial" if idx == 4 else "fact-check"
             cases.append({
-                "question": question,
-                "expected_answer": expected_answer,
-                "expected_retrieval_ids": [doc_id],
+                "id": f"case_{case_id}",
+                "query": question,
+                "ground_truth_answer": expected_answer,
+                "ground_truth_doc_ids": [doc_id],
+                "type": case_type,
                 "metadata": {
-                    "difficulty": difficulty,
-                    "type": case_type
+                    "difficulty": difficulty
                 }
             })
+
+            case_id += 1
 
     return cases
 
