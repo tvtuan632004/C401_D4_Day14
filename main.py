@@ -18,18 +18,12 @@ class ExpertEvaluator:
         self.top_k = top_k
 
     def _extract_retrieved_ids(self, resp):
-        """
-        Cố gắng lấy retrieved_ids từ output của agent.
-        Ưu tiên các key phổ biến. Nếu không có thì trả [].
-        """
         if not isinstance(resp, dict):
             return []
 
-        # Trường hợp agent đã trả thẳng retrieved_ids
         if "retrieved_ids" in resp and isinstance(resp["retrieved_ids"], list):
             return resp["retrieved_ids"]
 
-        # Một số format phổ biến khác
         for key in ["documents", "context_docs", "contexts", "sources"]:
             if key in resp and isinstance(resp[key], list):
                 extracted = []
@@ -37,7 +31,6 @@ class ExpertEvaluator:
                     if isinstance(item, str):
                         extracted.append(item)
                     elif isinstance(item, dict):
-                        # ưu tiên doc_id/id/source_id
                         doc_id = item.get("doc_id") or item.get("id") or item.get("source_id")
                         if doc_id:
                             extracted.append(doc_id)
@@ -58,7 +51,8 @@ class ExpertEvaluator:
                     "ground_truth_doc_ids": expected_ids,
                     "retrieved_ids": retrieved_ids,
                 }
-            ]
+            ],
+            top_k=self.top_k
         )
 
         detail = retrieval_result["details"][0] if retrieval_result["details"] else {}
@@ -69,11 +63,9 @@ class ExpertEvaluator:
             "rank": detail.get("rank", -1),
             "expected_ids": detail.get("expected_ids", expected_ids),
             "retrieved_ids": detail.get("retrieved_ids", retrieved_ids),
+            "recall_at_k": detail.get("recall_at_k", 0.0),
+            "is_multi_doc": detail.get("is_multi_doc", False),
         }
-
-        # Nếu retrieval_eval.py sau này có recall_at_k thì tự động lấy
-        if "recall_at_k" in detail:
-            retrieval_metrics["recall_at_k"] = detail["recall_at_k"]
 
         return {
             "faithfulness": 0.9,
