@@ -106,6 +106,9 @@ async def run_benchmark_with_results(agent_version: str):
     avg_score = sum(r["judge"]["final_score"] for r in results) / total
     avg_hit_rate = sum(r["ragas"]["retrieval"].get("hit_rate", 0.0) for r in results) / total
     avg_mrr = sum(r["ragas"]["retrieval"].get("mrr", 0.0) for r in results) / total
+    avg_recall_at_k = sum(
+        r["ragas"]["retrieval"].get("recall_at_k", 0.0) for r in results
+    ) / total
     agreement_rate = sum(r["judge"]["agreement_rate"] for r in results) / total
     avg_latency = sum(r.get("latency", 0.0) for r in results) / total
 
@@ -129,13 +132,10 @@ async def run_benchmark_with_results(agent_version: str):
             "avg_score": avg_score,
             "hit_rate": avg_hit_rate,
             "mrr": avg_mrr,
-            "agreement_rate": agreement_rate,
-            "avg_latency_sec": avg_latency,
-            "pass_count": pass_count,
-            "fail_count": fail_count,
+            "recall_at_k": avg_recall_at_k,
+            "agreement_rate": agreement_rate
         }
     }
-
     if avg_recall_at_k is not None:
         summary["metrics"]["recall_at_k"] = avg_recall_at_k
 
@@ -187,11 +187,12 @@ async def main():
             "avg_score": v2_summary["metrics"]["avg_score"],
             "hit_rate": v2_summary["metrics"]["hit_rate"],
             "mrr": v2_summary["metrics"]["mrr"],
+            "recall_at_k": v2_summary["metrics"]["recall_at_k"],
             "agreement_rate": v2_summary["metrics"]["agreement_rate"],
-            "avg_latency_sec": v2_summary["metrics"]["avg_latency_sec"],
             "baseline_score": v1_summary["metrics"]["avg_score"],
             "baseline_hit_rate": v1_summary["metrics"]["hit_rate"],
             "baseline_mrr": v1_summary["metrics"]["mrr"],
+            "baseline_recall_at_k": v1_summary["metrics"]["recall_at_k"],
             "delta_vs_baseline": delta
         }
     }
