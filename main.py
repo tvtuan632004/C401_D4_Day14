@@ -9,18 +9,76 @@ load_dotenv()
 from engine.runner import BenchmarkRunner
 from agent.main_agent import MainAgent
 from engine.llm_judge import LLMJudge
+from engine.retrieval_eval import RetrievalEvaluator
 
 
 class ExpertEvaluator:
+    def __init__(self, top_k: int = 3):
+        self.retrieval_evaluator = RetrievalEvaluator()
+        self.top_k = top_k
+
+    def _extract_retrieved_ids(self, resp):
+        """
+        Cố gắng lấy retrieved_ids từ output của agent.
+        Ưu tiên các key phổ biến. Nếu không có thì trả [].
+        """
+        if not isinstance(resp, dict):
+            return []
+
+        # Trường hợp agent đã trả thẳng retrieved_ids
+        if "retrieved_ids" in resp and isinstance(resp["retrieved_ids"], list):
+            return resp["retrieved_ids"]
+
+        # Một số format phổ biến khác
+        for key in ["documents", "context_docs", "contexts", "sources"]:
+            if key in resp and isinstance(resp[key], list):
+                extracted = []
+                for item in resp[key]:
+                    if isinstance(item, str):
+                        extracted.append(item)
+                    elif isinstance(item, dict):
+                        # ưu tiên doc_id/id/source_id
+                        doc_id = item.get("doc_id") or item.get("id") or item.get("source_id")
+                        if doc_id:
+                            extracted.append(doc_id)
+                if extracted:
+                    return extracted
+
+        return []
+
     async def score(self, case, resp):
-        # Mock retrieval metrics
+        expected_ids = case.get("ground_truth_doc_ids", [])
+        retrieved_ids = self._extract_retrieved_ids(resp)
+
+        retrieval_result = await self.retrieval_evaluator.evaluate_batch(
+            [
+                {
+                    "id": case.get("id"),
+                    "query": case.get("question", ""),
+                    "ground_truth_doc_ids": expected_ids,
+                    "retrieved_ids": retrieved_ids,
+                }
+            ]
+        )
+
+        detail = retrieval_result["details"][0] if retrieval_result["details"] else {}
+
+        retrieval_metrics = {
+            "hit_rate": detail.get("hit", 0.0),
+            "mrr": detail.get("mrr", 0.0),
+            "rank": detail.get("rank", -1),
+            "expected_ids": detail.get("expected_ids", expected_ids),
+            "retrieved_ids": detail.get("retrieved_ids", retrieved_ids),
+        }
+
+        # Nếu retrieval_eval.py sau này có recall_at_k thì tự động lấy
+        if "recall_at_k" in detail:
+            retrieval_metrics["recall_at_k"] = detail["recall_at_k"]
+
         return {
             "faithfulness": 0.9,
             "relevancy": 0.8,
-            "retrieval": {
-                "hit_rate": 1.0,
-                "mrr": 0.5
-            }
+            "retrieval": retrieval_metrics,
         }
 
 
@@ -42,16 +100,31 @@ async def run_benchmark_with_results(agent_version: str):
 
     runner = BenchmarkRunner(
         MainAgent(version=agent_mode),
-        ExpertEvaluator(),
+        ExpertEvaluator(top_k=3),
         LLMJudge()
     )
 
     results = await runner.run_all(dataset)
     total = len(results)
 
+    if total == 0:
+        print("❌ Không có kết quả benchmark.")
+        return None, None
+
     avg_score = sum(r["judge"]["final_score"] for r in results) / total
-    hit_rate = sum(r["ragas"]["retrieval"]["hit_rate"] for r in results) / total
+    avg_hit_rate = sum(r["ragas"]["retrieval"].get("hit_rate", 0.0) for r in results) / total
+    avg_mrr = sum(r["ragas"]["retrieval"].get("mrr", 0.0) for r in results) / total
     agreement_rate = sum(r["judge"]["agreement_rate"] for r in results) / total
+    avg_latency = sum(r.get("latency", 0.0) for r in results) / total
+
+    has_recall = any("recall_at_k" in r["ragas"]["retrieval"] for r in results)
+    avg_recall_at_k = (
+        sum(r["ragas"]["retrieval"].get("recall_at_k", 0.0) for r in results) / total
+        if has_recall else None
+    )
+
+    pass_count = sum(1 for r in results if r.get("status") == "pass")
+    fail_count = total - pass_count
 
     summary = {
         "metadata": {
@@ -62,10 +135,17 @@ async def run_benchmark_with_results(agent_version: str):
         },
         "metrics": {
             "avg_score": avg_score,
-            "hit_rate": hit_rate,
-            "agreement_rate": agreement_rate
+            "hit_rate": avg_hit_rate,
+            "mrr": avg_mrr,
+            "agreement_rate": agreement_rate,
+            "avg_latency_sec": avg_latency,
+            "pass_count": pass_count,
+            "fail_count": fail_count,
         }
     }
+
+    if avg_recall_at_k is not None:
+        summary["metrics"]["recall_at_k"] = avg_recall_at_k
 
     return results, summary
 
@@ -90,6 +170,16 @@ async def main():
     print(f"V2 Score: {v2_summary['metrics']['avg_score']:.2f}")
     print(f"Delta: {'+' if delta >= 0 else ''}{delta:.2f}")
 
+    print(f"V1 Hit Rate: {v1_summary['metrics']['hit_rate']:.2f}")
+    print(f"V2 Hit Rate: {v2_summary['metrics']['hit_rate']:.2f}")
+
+    print(f"V1 MRR: {v1_summary['metrics']['mrr']:.2f}")
+    print(f"V2 MRR: {v2_summary['metrics']['mrr']:.2f}")
+
+    if "recall_at_k" in v1_summary["metrics"] and "recall_at_k" in v2_summary["metrics"]:
+        print(f"V1 Recall@K: {v1_summary['metrics']['recall_at_k']:.2f}")
+        print(f"V2 Recall@K: {v2_summary['metrics']['recall_at_k']:.2f}")
+
     os.makedirs("reports", exist_ok=True)
 
     final_summary = {
@@ -104,11 +194,20 @@ async def main():
         "metrics": {
             "avg_score": v2_summary["metrics"]["avg_score"],
             "hit_rate": v2_summary["metrics"]["hit_rate"],
+            "mrr": v2_summary["metrics"]["mrr"],
             "agreement_rate": v2_summary["metrics"]["agreement_rate"],
+            "avg_latency_sec": v2_summary["metrics"]["avg_latency_sec"],
             "baseline_score": v1_summary["metrics"]["avg_score"],
+            "baseline_hit_rate": v1_summary["metrics"]["hit_rate"],
+            "baseline_mrr": v1_summary["metrics"]["mrr"],
             "delta_vs_baseline": delta
         }
     }
+
+    if "recall_at_k" in v2_summary["metrics"]:
+        final_summary["metrics"]["recall_at_k"] = v2_summary["metrics"]["recall_at_k"]
+    if "recall_at_k" in v1_summary["metrics"]:
+        final_summary["metrics"]["baseline_recall_at_k"] = v1_summary["metrics"]["recall_at_k"]
 
     with open("reports/summary.json", "w", encoding="utf-8") as f:
         json.dump(final_summary, f, ensure_ascii=False, indent=2)
