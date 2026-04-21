@@ -11,23 +11,21 @@ class BenchmarkRunner:
 
     async def run_single_test(self, test_case: Dict) -> Dict:
         start_time = time.perf_counter()
-        
-        # 1. Gọi Agent
-        response = await self.agent.query(test_case["question"])
+
+        # Dùng đúng schema hiện tại của golden_set.jsonl
+        response = await self.agent.query(test_case["query"])
         latency = time.perf_counter() - start_time
-        
-        # 2. Chạy RAGAS metrics
+
         ragas_scores = await self.evaluator.score(test_case, response)
-        
-        # 3. Chạy Multi-Judge
+
         judge_result = await self.judge.evaluate_multi_judge(
-            test_case["question"], 
-            response["answer"], 
+            test_case["query"],
+            response["answer"],
             test_case["expected_answer"]
         )
-        
+
         return {
-            "test_case": test_case["question"],
+            "test_case": test_case["query"],
             "agent_response": response["answer"],
             "latency": latency,
             "ragas": ragas_scores,
@@ -36,9 +34,6 @@ class BenchmarkRunner:
         }
 
     async def run_all(self, dataset: List[Dict], batch_size: int = 5) -> List[Dict]:
-        """
-        Chạy song song bằng asyncio.gather với giới hạn batch_size để không bị Rate Limit.
-        """
         results = []
         for i in range(0, len(dataset), batch_size):
             batch = dataset[i:i + batch_size]

@@ -13,17 +13,31 @@ from engine.llm_judge import LLMJudge
 
 class ExpertEvaluator:
     async def score(self, case, resp):
-        # Mock retrieval metrics
+        gt_docs = case.get("ground_truth_doc_ids", [])
+        retrieved_docs = resp.get("retrieved_doc_ids", [])
+
+        hit_rate = 1.0 if any(doc in retrieved_docs for doc in gt_docs) else 0.0
+
+        mrr = 0.0
+        for rank, doc_id in enumerate(retrieved_docs, start=1):
+            if doc_id in gt_docs:
+                mrr = 1.0 / rank
+                break
+
+        recall_at_k = (
+            sum(1 for doc in gt_docs if doc in retrieved_docs) / len(gt_docs)
+            if gt_docs else 0.0
+        )
+
         return {
             "faithfulness": 0.9,
             "relevancy": 0.8,
             "retrieval": {
-                "hit_rate": 1.0,
-                "mrr": 0.5
+                "hit_rate": hit_rate,
+                "mrr": mrr,
+                "recall_at_k": recall_at_k,
             }
         }
-
-
 async def run_benchmark_with_results(agent_version: str):
     print(f"🚀 Khởi động Benchmark cho {agent_version}...")
 
@@ -51,6 +65,8 @@ async def run_benchmark_with_results(agent_version: str):
 
     avg_score = sum(r["judge"]["final_score"] for r in results) / total
     hit_rate = sum(r["ragas"]["retrieval"]["hit_rate"] for r in results) / total
+    mrr = sum(r["ragas"]["retrieval"]["mrr"] for r in results) / total
+    recall_at_k = sum(r["ragas"]["retrieval"]["recall_at_k"] for r in results) / total
     agreement_rate = sum(r["judge"]["agreement_rate"] for r in results) / total
 
     summary = {
@@ -63,6 +79,8 @@ async def run_benchmark_with_results(agent_version: str):
         "metrics": {
             "avg_score": avg_score,
             "hit_rate": hit_rate,
+            "mrr": mrr,
+            "recall_at_k": recall_at_k,
             "agreement_rate": agreement_rate
         }
     }
@@ -104,6 +122,8 @@ async def main():
         "metrics": {
             "avg_score": v2_summary["metrics"]["avg_score"],
             "hit_rate": v2_summary["metrics"]["hit_rate"],
+            "mrr": v2_summary["metrics"]["mrr"],
+            "recall_at_k": v2_summary["metrics"]["recall_at_k"],
             "agreement_rate": v2_summary["metrics"]["agreement_rate"],
             "baseline_score": v1_summary["metrics"]["avg_score"],
             "delta_vs_baseline": delta
@@ -130,7 +150,12 @@ async def main():
             indent=2
         )
 
-    if delta >= 0 and v2_summary["metrics"]["agreement_rate"] >= 0.6:
+    if (
+        delta >= 0
+        and v2_summary["metrics"]["agreement_rate"] >= 0.6
+        and v2_summary["metrics"]["hit_rate"] >= 0.8
+        and v2_summary["metrics"]["recall_at_k"] >= 0.7
+    ):
         print("✅ QUYẾT ĐỊNH: CHẤP NHẬN BẢN CẬP NHẬT (APPROVE)")
     else:
         print("❌ QUYẾT ĐỊNH: TỪ CHỐI (BLOCK RELEASE)")
