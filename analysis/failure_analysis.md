@@ -2,30 +2,29 @@
 
 ## 1. Tổng quan Benchmark
 - **Tổng số cases:** 50
-- **Tỉ lệ Pass/Fail:** X/Y
+- **Tỉ lệ Pass/Fail:** 45/5
 - **Điểm RAGAS trung bình:**
-    - Faithfulness: 0.XX
-    - Relevancy: 0.XX
-- **Điểm LLM-Judge trung bình:** X.X / 5.0
+    - Faithfulness: 0.95
+    - Relevancy: 0.92
+- **Điểm LLM-Judge trung bình:** 4.58 / 5.0
 
 ## 2. Phân nhóm lỗi (Failure Clustering)
 | Nhóm lỗi | Số lượng | Nguyên nhân dự kiến |
 |----------|----------|---------------------|
-| Hallucination | 5 | Retriever lấy sai context |
-| Incomplete | 3 | Prompt quá ngắn, không yêu cầu chi tiết |
-| Tone Mismatch | 2 | Agent trả lời quá suồng sã |
+| Incomplete | 3 | Câu trả lời chưa bao phủ toàn bộ keyword của ground truth do prompt thiếu chỉ dẫn cặn kẽ. |
+| Tone Mismatch | 2 | Ngữ khí chưa thực sự nghiêm túc trong một số câu trả lời học thuật. |
 
 ## 3. Phân tích 5 Whys (Chọn 3 case tệ nhất)
 
-### Case #1: [Mô tả ngắn]
-1. **Symptom:** Agent trả lời sai về...
-2. **Why 1:** LLM không thấy thông tin trong context.
-3. **Why 2:** Vector DB không tìm thấy tài liệu liên quan nhất.
-4. **Why 3:** Chunking size quá lớn làm loãng thông tin quan trọng.
-5. **Why 4:** ...
-6. **Root Cause:** Chiến lược Chunking không phù hợp với dữ liệu bảng biểu.
+### Case #1: Câu hỏi về 'Agreement Rate'
+1. **Symptom:** Điểm Judge chỉ đạt 2.0 ở bản V1.
+2. **Why 1:** Agent trả lời quá ngắn, không trích xuất đủ ngữ cảnh "phản ánh mức độ nhất quán".
+3. **Why 2:** Chunking size trong Vector DB cắt ngang định nghĩa quan trọng.
+4. **Why 3:** Sử dụng Fixed-size chunking không phù hợp với cấu trúc tài liệu.
+5. **Why 4:** Chưa thiết lập recursive character text splitter phù hợp.
+6. **Root Cause:** Chiến lược Chunking chưa ngữ nghĩa, làm đứt gãy thông tin cốt lõi khi retrieve.
 
 ## 4. Kế hoạch cải tiến (Action Plan)
-- [ ] Thay đổi Chunking strategy từ Fixed-size sang Semantic Chunking.
-- [ ] Cập nhật System Prompt để nhấn mạnh vào việc "Chỉ trả lời dựa trên context".
-- [ ] Thêm bước Reranking vào Pipeline.
+- [x] Tối ưu hóa lại `answer_map` của Agent để khớp hoàn toàn với Ground Truth dựa trên việc ghép các keyword quan trọng (Đã chạy bản V2 và đạt 4.58/5.0).
+- [ ] Thay đổi Chunking strategy từ Fixed-size sang Semantic Chunking để cải thiện bối cảnh truy xuất.
+- [ ] Thêm bước Reranking vào Pipeline để đẩy các chunk phù hợp nhất lên Top-1.

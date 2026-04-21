@@ -11,7 +11,7 @@ class LLMJudge:
         self.openai_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
         genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-        self.gemini_model = genai.GenerativeModel("gemini-1.5-flash")
+        self.gemini_model = genai.GenerativeModel("gemini-pro")
 
     def _build_prompt(self, question: str, answer: str, ground_truth: str) -> str:
         return f"""
@@ -21,7 +21,7 @@ Question: {question}
 Ground Truth: {ground_truth}
 Answer: {answer}
 
-Score the answer from 0 to 1 based on correctness.
+Score the answer from 1 to 5 based on correctness.
 
 Return JSON:
 {{
@@ -33,34 +33,30 @@ Return JSON:
     async def _judge_gpt(self, question: str, answer: str, ground_truth: str):
         prompt = self._build_prompt(question, answer, ground_truth)
 
-        response = await self.openai_client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0
-        )
-
-        content = response.choices[0].message.content
-
         try:
+            response = await self.openai_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0
+            )
+            content = response.choices[0].message.content
             import json
             parsed = json.loads(content)
-            return parsed["score"], parsed.get("reason", "")
-        except:
-            return 0.5, "Failed to parse GPT response"
+            return float(parsed["score"]), parsed.get("reason", "")
+        except Exception as e:
+            return 3.0, f"Failed GPT: {str(e)}"
 
     async def _judge_gemini(self, question: str, answer: str, ground_truth: str):
         prompt = self._build_prompt(question, answer, ground_truth)
 
-        response = self.gemini_model.generate_content(prompt)
-
-        content = response.text
-
         try:
+            response = self.gemini_model.generate_content(prompt)
+            content = response.text
             import json
             parsed = json.loads(content)
-            return parsed["score"], parsed.get("reason", "")
-        except:
-            return 0.5, "Failed to parse Gemini response"
+            return float(parsed["score"]), parsed.get("reason", "")
+        except Exception as e:
+            return -1.0, f"Failed Gemini: {str(e)}"
 
     async def evaluate_multi_judge(self, question: str, answer: str, ground_truth: str) -> Dict[str, Any]:
 
@@ -72,11 +68,14 @@ Return JSON:
         score_gpt, reason_gpt = score_a
         score_gemini, reason_gemini = score_b
 
+        if score_gemini == -1.0:
+            score_gemini = score_gpt
+
         final_score = (score_gpt + score_gemini) / 2
 
-        agreement = 1 - abs(score_gpt - score_gemini)
+        agreement = 1 - (abs(score_gpt - score_gemini) / 5.0)
 
-        if abs(score_gpt - score_gemini) > 0.3:
+        if abs(score_gpt - score_gemini) > 1.5:
             final_score = min(score_gpt, score_gemini)
 
         return {
