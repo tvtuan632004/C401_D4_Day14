@@ -46,22 +46,9 @@ TOPICS = [
     },
 ]
 
-QUESTION_TEMPLATES = [
-    "AI Evaluation là gì?",
-    "Hit Rate dùng để đo điều gì?",
-    "MRR là gì?",
-    "Multi-judge consensus là gì?",
-    "Agreement Rate là gì?",
-    "Failure Analysis có vai trò gì?",
-    "5 Whys dùng để làm gì?",
-    "Regression testing trong AI là gì?",
-    "Release gate là gì?",
-    "Async runner có tác dụng gì?"
-]
-
-def build_cases() -> List[Dict]:
+def build_single_doc_cases(start_case_id: int = 0) -> List[Dict]:
     cases = []
-    case_id = 0
+    case_id = start_case_id
 
     mapping = {
         "doc_ai_eval_intro": [
@@ -136,7 +123,6 @@ def build_cases() -> List[Dict]:
         ],
     }
 
-    # return cases
     for doc_id, qa_list in mapping.items():
         for idx, (question, expected_answer) in enumerate(qa_list):
             difficulty = "hard" if idx == 4 else ("medium" if idx in [2, 3] else "easy")
@@ -148,13 +134,105 @@ def build_cases() -> List[Dict]:
                 "ground_truth_doc_ids": [doc_id],
                 "type": case_type,
                 "metadata": {
-                    "difficulty": difficulty
+                    "difficulty": difficulty,
+                    "reasoning": "single-doc"
                 }
             })
-
             case_id += 1
 
     return cases
+
+
+def build_multi_doc_cases(start_case_id: int) -> List[Dict]:
+    raw_cases = [
+        {
+            "query": "Hit Rate và MRR khác nhau ở điểm nào?",
+            "ground_truth_answer": "Hit Rate chỉ đo xem tài liệu đúng có xuất hiện trong top-k hay không, còn MRR đo thêm vị trí xếp hạng của tài liệu đúng.",
+            "ground_truth_doc_ids": ["doc_hit_rate", "doc_mrr"],
+            "type": "multi-doc",
+            "metadata": {"difficulty": "medium", "reasoning": "comparison"}
+        },
+        {
+            "query": "Metric nào dùng để đo mức độ nhất quán giữa nhiều judge model, và multi-judge dùng để làm gì?",
+            "ground_truth_answer": "Agreement Rate đo mức độ đồng thuận giữa các judge model, còn multi-judge consensus dùng nhiều model để tăng độ tin cậy khi chấm.",
+            "ground_truth_doc_ids": ["doc_agreement_rate", "doc_multi_judge"],
+            "type": "multi-doc",
+            "metadata": {"difficulty": "medium", "reasoning": "synthesis"}
+        },
+        {
+            "query": "Failure Analysis và 5 Whys phối hợp với nhau như thế nào?",
+            "ground_truth_answer": "Failure Analysis giúp phân nhóm lỗi và xác định vùng có vấn đề, còn 5 Whys đào sâu để tìm ra nguyên nhân gốc rễ của lỗi đó.",
+            "ground_truth_doc_ids": ["doc_failure_analysis", "doc_five_whys"],
+            "type": "multi-doc",
+            "metadata": {"difficulty": "medium", "reasoning": "synthesis"}
+        },
+        {
+            "query": "Regression testing và release gate liên quan với nhau thế nào khi đánh giá agent mới?",
+            "ground_truth_answer": "Regression testing so sánh agent mới với agent cũ bằng score, latency và cost; release gate dùng các ngưỡng đó để quyết định approve hay rollback.",
+            "ground_truth_doc_ids": ["doc_regression", "doc_release_gate"],
+            "type": "multi-doc",
+            "metadata": {"difficulty": "medium", "reasoning": "pipeline"}
+        },
+        {
+            "query": "AI Evaluation thường đo những gì, và async runner hỗ trợ quá trình benchmark ra sao?",
+            "ground_truth_answer": "AI Evaluation thường đo accuracy, latency, cost và safety; async runner giúp chạy benchmark song song để giảm thời gian đánh giá.",
+            "ground_truth_doc_ids": ["doc_ai_eval_intro", "doc_async_runner"],
+            "type": "multi-doc",
+            "metadata": {"difficulty": "medium", "reasoning": "synthesis"}
+        },
+        {
+            "query": "Nếu một hệ thống lấy được tài liệu đúng nhưng xếp hạng chưa tốt thì nên xem Hit Rate hay MRR, và vì sao?",
+            "ground_truth_answer": "Nên xem MRR vì MRR phản ánh vị trí xếp hạng của tài liệu đúng, trong khi Hit Rate chỉ cho biết tài liệu đúng có xuất hiện trong top-k hay không.",
+            "ground_truth_doc_ids": ["doc_hit_rate", "doc_mrr"],
+            "type": "multi-doc",
+            "metadata": {"difficulty": "hard", "reasoning": "comparison"}
+        },
+        {
+            "query": "Trong hệ thống chấm điểm bằng nhiều judge, metric nào cho biết các judge có đồng thuận không và tại sao vẫn cần multi-judge?",
+            "ground_truth_answer": "Agreement Rate cho biết mức độ đồng thuận giữa các judge, còn multi-judge vẫn cần để tăng độ tin cậy và giảm thiên lệch của một model đơn lẻ.",
+            "ground_truth_doc_ids": ["doc_agreement_rate", "doc_multi_judge"],
+            "type": "multi-doc",
+            "metadata": {"difficulty": "hard", "reasoning": "comparison"}
+        },
+        {
+            "query": "Sau khi phát hiện hệ thống trả lời sai, nên dùng Failure Analysis hay 5 Whys trước và vai trò của từng bước là gì?",
+            "ground_truth_answer": "Nên dùng Failure Analysis để phân loại và xác định nhóm lỗi trước, sau đó dùng 5 Whys để đào sâu nguyên nhân gốc rễ của lỗi.",
+            "ground_truth_doc_ids": ["doc_failure_analysis", "doc_five_whys"],
+            "type": "multi-doc",
+            "metadata": {"difficulty": "hard", "reasoning": "process"}
+        },
+        {
+            "query": "Điểm benchmark của bản mới được dùng như thế nào trong regression testing và release gate?",
+            "ground_truth_answer": "Regression testing dùng điểm benchmark để so sánh bản mới với bản cũ, còn release gate dùng các ngưỡng score, latency và cost để quyết định phát hành hay rollback.",
+            "ground_truth_doc_ids": ["doc_regression", "doc_release_gate"],
+            "type": "multi-doc",
+            "metadata": {"difficulty": "hard", "reasoning": "pipeline"}
+        },
+        {
+            "query": "Benchmark một hệ thống AI thường quan tâm cả metric chất lượng lẫn thời gian chạy; hai ý này gắn với tài liệu nào?",
+            "ground_truth_answer": "Metric chất lượng gắn với AI Evaluation, còn giảm thời gian chạy benchmark gắn với Async Runner.",
+            "ground_truth_doc_ids": ["doc_ai_eval_intro", "doc_async_runner"],
+            "type": "multi-doc",
+            "metadata": {"difficulty": "hard", "reasoning": "linking"}
+        },
+    ]
+
+    cases = []
+    case_id = start_case_id
+    for item in raw_cases:
+        cases.append({
+            "id": f"case_{case_id}",
+            **item
+        })
+        case_id += 1
+    return cases
+
+
+def build_cases() -> List[Dict]:
+    single_doc_cases = build_single_doc_cases(0)
+    multi_doc_cases = build_multi_doc_cases(len(single_doc_cases))
+    return single_doc_cases + multi_doc_cases
+
 
 async def main():
     os.makedirs("data", exist_ok=True)
@@ -165,6 +243,7 @@ async def main():
             f.write(json.dumps(case, ensure_ascii=False) + "\n")
 
     print(f"Done! Saved {len(cases)} test cases to data/golden_set.jsonl")
+
 
 if __name__ == "__main__":
     asyncio.run(main())
